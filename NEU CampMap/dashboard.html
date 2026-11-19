@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NEU CampMap — New Era University Interactive Map</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    @keyframes dashFlow {
+      to { stroke-dashoffset: -28; }
+    }
+    .route-path-animated {
+      stroke-dasharray: 8 6;
+      animation: dashFlow 0.85s linear infinite;
+    }
+
+    @keyframes pulseRing {
+      0% { transform: scale(0.85); opacity: 0.9; }
+      70% { transform: scale(2.1); opacity: 0; }
+      100% { transform: scale(2.1); opacity: 0; }
+    }
+    .pin-pulse {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: pulseRing 1.8s ease-out infinite;
+    }
+
+    .map-building {
+      transition: filter 0.18s ease, transform 0.18s ease;
+      cursor: pointer;
+    }
+    .map-building:hover {
+      filter: brightness(1.08);
+    }
+
+    .room-zone {
+      transition: all 0.18s ease;
+      cursor: pointer;
+    }
+    .room-zone:hover {
+      filter: brightness(0.95);
+    }
+
+    /* Smooth glassmorphism & custom scrollbar */
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 5px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 h-screen flex flex-col overflow-hidden select-none">
+
+  <!-- TOP NAVIGATION HEADER -->
+  <header class="h-16 bg-white border-b border-slate-200 px-3 sm:px-5 flex items-center justify-between shrink-0 z-30 shadow-sm">
+    <div class="flex items-center gap-2.5 sm:gap-3">
+      <button id="mobileMenuBtn" onclick="toggleMobileSidebar()" class="lg:hidden p-2.5 rounded-xl text-slate-600 hover:bg-slate-100 active:scale-95 transition" aria-label="Toggle Directory">
+        <i class="fa-solid fa-bars text-lg"></i>
+      </button>
+      <div class="flex items-center gap-2.5 cursor-pointer group" onclick="switchView('campus')">
+        <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#006837] text-[#F4B400] flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
+          <i class="fa-solid fa-compass text-lg sm:text-xl"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-1.5">
+            <h1 class="font-extrabold text-base sm:text-lg tracking-tight text-slate-900 leading-none">NEU CampMap</h1>
+            <span class="hidden sm:inline-block text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-50 text-[#006837] border border-emerald-200">Central Ave</span>
+          </div>
+          <p class="text-[11px] text-slate-500 hidden sm:block mt-0.5">New Era University • Interactive Map & Room Finder</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Building / View Selector Pills (Desktop) -->
+    <div class="hidden xl:flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200/80">
+      <button onclick="switchView('campus')" id="viewBtn-campus" class="view-pill px-3 py-1.5 rounded-lg text-xs font-semibold transition bg-white text-[#006837] shadow-sm">
+        <i class="fa-solid fa-map mr-1"></i>Campus
+      </button>
+      <button onclick="switchView('MAIN')" id="viewBtn-MAIN" class="view-pill px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 transition">
+        Main Bldg
+      </button>
+      <button onclick="switchView('IS')" id="viewBtn-IS" class="view-pill px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 transition">
+        IS Bldg
+      </button>
+      <button onclick="switchView('PSB')" id="viewBtn-PSB" class="view-pill px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 transition">
+        PSB
+      </button>
+      <button onclick="switchView('SOM')" id="viewBtn-SOM" class="view-pill px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 transition">
+        SOM
+      </button>
+      <button onclick="switchView('LIB')" id="viewBtn-LIB" class="view-pill px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 transition">
+        Library
+      </button>
+      <button onclick="switchView('CRFC')" id="viewBtn-CRFC" class="view-pill px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 transition">
+        CRFC
+      </button>
+    </div>
+
+    <!-- Right Controls: Traffic Flow, My Schedule & User -->
+    <div class="flex items-center gap-1.5 sm:gap-2">
+      <button id="trafficFlowToggleBtn" onclick="toggleTrafficFlow()" class="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 text-xs font-semibold transition active:scale-95" title="Toggle Traffic Flow going IS">
+        <i class="fa-solid fa-route text-amber-600"></i>
+        <span class="hidden md:inline">IS Traffic Flow</span>
+      </button>
+      <button onclick="openScheduleModal()" class="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-[#006837] border border-emerald-200 text-xs font-semibold transition active:scale-95">
+        <i class="fa-regular fa-calendar-check"></i>
+        <span class="hidden sm:inline">My Schedule</span>
+      </button>
+      <div class="hidden sm:flex items-center gap-1.5 bg-slate-100 border border-slate-200 px-2.5 py-1.5 rounded-xl text-xs">
+        <i class="fa-solid fa-user-graduate text-[#006837]"></i>
+        <span id="userProfileEmail" class="font-semibold text-slate-700 max-w-[140px] truncate">guest@neu.edu.ph</span>
+      </div>
+      <button onclick="logoutUser()" class="p-2.5 rounded-xl text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition" title="Sign Out">
+        <i class="fa-solid fa-right-from-bracket"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN WORKSPACE -->
+  <div class="flex-1 flex overflow-hidden relative">
+
+    <!-- MOBILE SIDEBAR BACKDROP -->
+    <div id="sidebarBackdrop" onclick="toggleMobileSidebar(false)" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-20 hidden lg:hidden"></div>
+
+    <!-- LEFT SIDEBAR: DIRECTORY & ROUTE PLANNER -->
+    <aside id="sidebar" class="fixed lg:static inset-y-0 left-0 w-80 sm:w-96 bg-white border-r border-slate-200 flex flex-col z-20 transform -translate-x-full lg:translate-x-0 transition-transform duration-200 ease-out pt-16 lg:pt-0 shadow-xl lg:shadow-none">
+
+      <!-- Mode Switcher Tabs -->
+      <div class="p-3 border-b border-slate-100 grid grid-cols-2 gap-1.5 bg-slate-50/70">
+        <button id="tabBtn-directory" onclick="setSidebarTab('directory')" class="py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 bg-white text-[#006837] shadow-sm border border-slate-200/80 transition">
+          <i class="fa-solid fa-magnifying-glass"></i> Find Rooms
+        </button>
+        <button id="tabBtn-directions" onclick="setSidebarTab('directions')" class="py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 text-slate-600 hover:text-slate-900 transition">
+          <i class="fa-solid fa-diamond-turn-right"></i> Directions
+        </button>
+      </div>
+
+      <!-- TAB 1: DIRECTORY & SEARCH -->
+      <div id="panel-directory" class="flex-1 flex flex-col overflow-hidden">
+        <div class="p-3.5 border-b border-slate-100 space-y-2.5">
+          <div class="relative">
+            <i class="fa-solid fa-search absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+            <input
+              type="text"
+              id="searchInput"
+              oninput="handleSearch(this.value)"
+              placeholder="Search Main Bldg, IS, PSB, SOM, CICS..."
+              class="w-full pl-9 pr-8 py-2.5 bg-slate-100 border border-transparent focus:border-[#006837] focus:bg-white rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none transition"
+            />
+            <button id="clearSearchBtn" onclick="clearSearch()" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1">
+              <i class="fa-solid fa-circle-xmark text-sm"></i>
+            </button>
+          </div>
+
+          <!-- Category Filter Pills -->
+          <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5" id="categoryFilters">
+            <button onclick="setCategoryFilter('All')" data-cat="All" class="cat-pill shrink-0 px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#006837] text-white transition">All</button>
+            <button onclick="setCategoryFilter('Classrooms & Labs')" data-cat="Classrooms & Labs" class="cat-pill shrink-0 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 transition">Classrooms</button>
+            <button onclick="setCategoryFilter('Admin & Offices')" data-cat="Admin & Offices" class="cat-pill shrink-0 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 transition">Offices</button>
+            <button onclick="setCategoryFilter('Facilities & Dorms')" data-cat="Facilities & Dorms" class="cat-pill shrink-0 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 transition">Facilities</button>
+            <button onclick="setCategoryFilter('Gates & Parking')" data-cat="Gates & Parking" class="cat-pill shrink-0 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 transition">Gates & Parking</button>
+          </div>
+        </div>
+
+        <!-- Directory Results List -->
+        <div id="directoryList" class="flex-1 overflow-y-auto custom-scrollbar p-3.5 space-y-2">
+          <!-- Populated dynamically by JS -->
+        </div>
+      </div>
+
+      <!-- TAB 2: DIRECTIONS / PATHFINDER -->
+      <div id="panel-directions" class="hidden flex-1 flex-col overflow-hidden">
+        <div class="p-4 border-b border-slate-100 space-y-3 bg-slate-50/50">
+          <div class="space-y-2 relative">
+            <!-- Start Location -->
+            <div>
+              <label class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 block mb-1">Starting Point</label>
+              <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-emerald-600 ring-4 ring-emerald-100 shrink-0"></span>
+                <select id="routeStartSelect" onchange="calculateAndDrawRoute()" class="w-full py-2 px-3 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:border-[#006837]"></select>
+              </div>
+            </div>
+
+            <!-- Swap Button -->
+            <div class="flex justify-end -my-1 pr-2">
+              <button onclick="swapRoutePoints()" class="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-500 hover:text-[#006837] hover:border-emerald-300 shadow-sm transition" title="Swap start and destination">
+                <i class="fa-solid fa-up-down text-xs"></i>
+              </button>
+            </div>
+
+            <!-- Destination Location -->
+            <div>
+              <label class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 block mb-1">Destination</label>
+              <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-[#F4B400] ring-4 ring-amber-100 shrink-0"></span>
+                <select id="routeDestSelect" onchange="calculateAndDrawRoute()" class="w-full py-2 px-3 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:border-[#006837]"></select>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex gap-2 pt-1">
+            <button onclick="calculateAndDrawRoute()" class="flex-1 py-2.5 px-3 bg-[#006837] hover:bg-[#00522B] text-white font-semibold text-xs rounded-xl shadow-sm transition flex items-center justify-center gap-1.5">
+              <i class="fa-solid fa-route"></i> Show Route
+            </button>
+            <button onclick="clearRoute()" class="py-2.5 px-3 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 font-semibold text-xs rounded-xl transition">
+              Clear
+            </button>
+          </div>
+        </div>
+
+        <!-- Route Summary & Step-by-Step Instructions -->
+        <div id="routeStepsContainer" class="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
+          <div class="text-center py-8 px-4 text-slate-400">
+            <div class="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-3">
+              <i class="fa-solid fa-person-walking text-xl"></i>
+            </div>
+            <p class="text-xs font-medium text-slate-600">Select a starting gate or room and your destination to view NEU campus directions.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sidebar Mobile Account Footer -->
+      <div class="sm:hidden p-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs">
+        <span id="mobileUserEmail" class="font-semibold text-slate-700 truncate max-w-[200px]">guest@neu.edu.ph</span>
+        <button onclick="logoutUser()" class="text-rose-600 font-bold px-2.5 py-1 rounded-lg hover:bg-rose-50">Sign Out</button>
+      </div>
+    </aside>
+
+    <!-- CENTER INTERACTIVE MAP CANVAS AREA -->
+    <main class="flex-1 relative bg-slate-100 flex flex-col overflow-hidden">
+
+      <!-- Floating Top Map Bar: Breadcrumbs & Floor Switcher -->
+      <div class="absolute top-3 left-3 right-3 z-10 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+        <!-- View / Building Breadcrumb -->
+        <div class="pointer-events-auto flex items-center gap-1.5 bg-white/95 backdrop-blur-md px-3 py-2 rounded-2xl shadow-sm border border-slate-200/80">
+          <button onclick="switchView('campus')" class="text-xs font-semibold text-[#006837] hover:underline flex items-center gap-1">
+            <i class="fa-solid fa-map-location-dot"></i> NEU Campus
+          </button>
+          <span id="breadcrumbSeparator" class="hidden text-slate-300 text-xs">/</span>
+          <span id="breadcrumbCurrent" class="hidden text-xs font-bold text-slate-800">Main Building</span>
+        </div>
+
+        <!-- Floor Level Switcher (Visible when inside a building) -->
+        <div id="floorSelectorBar" class="hidden pointer-events-auto flex items-center gap-1 bg-white/95 backdrop-blur-md p-1.5 rounded-2xl shadow-sm border border-slate-200/80">
+          <span class="text-[11px] font-semibold text-slate-400 px-2">Floor:</span>
+          <button onclick="setFloor(1)" id="floorBtn-1" class="floor-pill px-3 py-1 rounded-xl text-xs font-bold bg-[#006837] text-white transition">1F</button>
+          <button onclick="setFloor(2)" id="floorBtn-2" class="floor-pill px-3 py-1 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition">2F</button>
+          <button onclick="setFloor(3)" id="floorBtn-3" class="floor-pill px-3 py-1 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition">3F</button>
+        </div>
+
+        <!-- Mobile/Tablet Quick Building Select -->
+        <div class="xl:hidden pointer-events-auto">
+          <select id="mobileViewSelect" onchange="switchView(this.value)" class="bg-white/95 backdrop-blur-md px-3 py-2 rounded-2xl shadow-sm border border-slate-200/80 text-xs font-semibold text-slate-700 focus:outline-none">
+            <option value="campus">NEU Campus Overview</option>
+            <option value="MAIN">Main Building</option>
+            <option value="IS">Integrated School (IS)</option>
+            <option value="PSB">PSB Building</option>
+            <option value="SOM">School of Management</option>
+            <option value="LIB">NEU Library</option>
+            <option value="CRFC">Recreation & Fitness</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Interactive SVG Viewport -->
+      <div id="mapViewport" class="flex-1 w-full h-full flex items-center justify-center p-2 sm:p-6 overflow-hidden cursor-grab active:cursor-grabbing touch-none">
+        <svg id="campusSvg" viewBox="0 0 900 620" class="w-full h-full max-w-5xl max-h-full drop-shadow-sm transition-transform duration-150" xmlns="http://www.w3.org/2000/svg">
+          <!-- Rendered dynamically by JS -->
+        </svg>
+      </div>
+
+      <!-- Bottom-Right Zoom & Reset Controls -->
+      <div class="absolute bottom-4 right-4 z-10 flex flex-col gap-1.5 bg-white/95 backdrop-blur-md p-1.5 rounded-2xl shadow-md border border-slate-200/80">
+        <button onclick="adjustZoom(0.18)" class="w-9 h-9 rounded-xl hover:bg-slate-100 text-slate-700 flex items-center justify-center transition" title="Zoom In">
+          <i class="fa-solid fa-plus text-xs"></i>
+        </button>
+        <button id="zoomLevelBtn" onclick="resetZoom()" class="w-9 h-9 rounded-xl hover:bg-slate-100 text-slate-700 flex items-center justify-center transition text-[11px] font-bold" title="Reset View">
+          100%
+        </button>
+        <button onclick="adjustZoom(-0.18)" class="w-9 h-9 rounded-xl hover:bg-slate-100 text-slate-700 flex items-center justify-center transition" title="Zoom Out">
+          <i class="fa-solid fa-minus text-xs"></i>
+        </button>
+      </div>
+
+      <!-- Bottom-Left Map Legend -->
+      <div class="hidden sm:flex items-center gap-3 absolute bottom-4 left-4 z-10 bg-white/95 backdrop-blur-md px-3.5 py-2 rounded-2xl shadow-sm border border-slate-200/80 text-[11px] font-medium text-slate-600">
+        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-[#172554]"></span> NEU Building</span>
+        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-[#3b82f6]"></span> Entrance / Exit</span>
+        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-[#e11d48]"></span> Parking (P)</span>
+        <span class="flex items-center gap-1.5"><span class="w-3 h-1 rounded-full bg-[#facc15] border border-amber-500"></span> IS Traffic Flow</span>
+      </div>
+
+      <!-- Floating Selected Location Detail Card -->
+      <div id="locationDetailCard" class="hidden absolute bottom-4 left-4 right-16 sm:right-auto sm:w-96 z-20 bg-white rounded-2xl shadow-xl border border-slate-200/90 p-4 transition-all">
+        <div class="flex items-start justify-between gap-2">
+          <div>
+            <div class="flex items-center gap-2">
+              <span id="detailCodeBadge" class="px-2 py-0.5 rounded-md text-xs font-bold bg-emerald-50 text-[#006837]">MAIN</span>
+              <span id="detailStatusBadge" class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700">Open</span>
+            </div>
+            <h3 id="detailTitle" class="font-bold text-slate-900 text-base mt-1.5">Main Building</h3>
+            <p id="detailSubtitle" class="text-xs text-slate-500 mt-0.5">Central Avenue Campus</p>
+          </div>
+          <button onclick="closeDetailCard()" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <p id="detailDescription" class="text-xs text-slate-600 mt-2.5 leading-relaxed">
+          Primary academic and administrative building at New Era University.
+        </p>
+
+        <div class="mt-3.5 pt-3 border-t border-slate-100 flex items-center gap-2">
+          <button id="detailNavigateBtn" class="flex-1 py-2.5 px-3 rounded-xl bg-[#006837] hover:bg-[#00522B] text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm transition">
+            <i class="fa-solid fa-diamond-turn-right"></i> Navigate Here
+          </button>
+          <button id="detailOpenFloorBtn" class="py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition">
+            View Floor
+          </button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- MY SCHEDULE MODAL -->
+  <div id="scheduleModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+    <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden">
+      <div class="p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-[#006837] to-[#0A5C36] text-white">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center">
+            <i class="fa-solid fa-graduation-cap"></i>
+          </div>
+          <div>
+            <h2 class="font-bold text-base">NEU Student & Campus Schedule</h2>
+            <p class="text-xs text-emerald-100">Quick-Jump Navigation • Central Ave Campus</p>
+          </div>
+        </div>
+        <button onclick="closeScheduleModal()" class="p-2 rounded-xl text-white/80 hover:text-white hover:bg-white/10 transition">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="p-4 space-y-2.5 max-h-96 overflow-y-auto custom-scrollbar" id="scheduleListContainer">
+        <!-- Populated dynamically -->
+      </div>
+
+      <div class="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+        <button onclick="closeScheduleModal()" class="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-semibold transition">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="auth.js"></script>
+  <script src="dashboard.js"></script>
+</body>
+</html>
